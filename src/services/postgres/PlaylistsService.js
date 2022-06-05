@@ -55,6 +55,15 @@ class PlaylistsService {
   }
 
   async addSongToPlaylist(playlistId, songId) {
+    const song = {
+      text: 'SELECT * FROM songs WHERE id = $1',
+      values: [songId],
+    };
+    const getSong = await this._pool.query(song);
+
+    if (!getSong.rows.length) {
+      throw new NotFoundError('Lagu gagal ditambahkan');
+    }
     const query = {
       text: 'INSERT INTO playlistsongs (playlist_id, song_id) VALUES($1, $2) RETURNING id',
       values: [playlistId, songId],
@@ -68,17 +77,32 @@ class PlaylistsService {
   }
 
   async getSongsFromPlaylist(playlistId) {
-    const query = {
-      text: `SELECT songs.id, songs.title, songs.performer
-      FROM songs
-      JOIN playlistsongs
-      ON songs.id = playlistsongs.song_id WHERE playlistsongs.playlist_id = $1`,
+    const playlist = {
+      text: `SELECT playlists.id, playlists.name, users.username 
+            FROM playlistsongs 
+            INNER JOIN playlists ON playlistsongs.playlist_id = playlists.id 
+            INNER JOIN users ON playlists.owner = users.id WHERE playlist_id = $1`,
       values: [playlistId],
     };
 
-    const result = await this._pool.query(query);
+    const songs = {
+      text: 'SELECT songs.id, songs.title, songs.performer FROM playlistsongs INNER JOIN songs ON playlistsongs.song_id = songs.id WHERE playlist_id = $1',
+      values: [playlistId],
+    };
 
-    return result.rows;
+    const resultPlaylist = await this._pool.query(playlist);
+    const resultSongs = await this._pool.query(songs);
+
+    if (!resultPlaylist.rowCount) {
+      throw new NotFoundError('Playlist tidak ditemukan');
+    }
+
+    return {
+      id: resultPlaylist.rows[0].id,
+      name: resultPlaylist.rows[0].name,
+      username: resultPlaylist.rows[0].username,
+      songs: resultSongs.rows,
+    };
   }
 
   async deleteSongFromPlaylist(playlistId, songId) {
@@ -100,6 +124,7 @@ class PlaylistsService {
       values: [id],
     };
     const result = await this._pool.query(query);
+
     if (!result.rows.length) {
       throw new NotFoundError('Playlist tidak ditemukan');
     }
@@ -131,6 +156,66 @@ class PlaylistsService {
     };
     const result = await this._pool.query(query);
     return result.rows;
+  }
+
+  async addActionPlaylistActivity(playlistId, songId, userId, action = '') {
+    console.log(playlistId, songId, userId, action);
+    const querySong = {
+      text: 'SELECT title FROM songs WHERE id = $1',
+      values: [songId],
+    };
+    const queryUser = {
+      text: 'SELECT username FROM users WHERE id = $1',
+      values: [userId],
+    };
+
+    const resultSong = await this._pool.query(querySong);
+    const resultUser = await this._pool.query(queryUser);
+    if (!resultSong.rowCount) {
+      throw new NotFoundError('lagu tidak ada');
+    }
+
+    if (!resultUser.rowCount) {
+      throw new NotFoundError('lagu tidak ada');
+    }
+    const { title } = resultSong.rows[0];
+    const { username } = resultUser.rows[0];
+
+    const id = `activity-${nanoid(16)}`;
+    const time = new Date().toISOString();
+    const act = (action === 'add') ? 'add' : 'delete';
+
+    const query = {
+      text: 'INSERT INTO playlist_songs_activities (id, playlist_id, song_id, user_id, action, time) VALUES ($1, $2, $3, $4, $5, $6)',
+      values: [id, playlistId, title, username, `${act}`, time],
+    };
+
+    const result = await this._pool.query(query);
+    console.log(query.values, result);
+    if (!result.rowCount) {
+      throw new InvariantError('activitas gagal ditambahkan');
+    }
+  }
+
+  async getPlaylistActivities(playlistId) {
+    const query = {
+      text: 'SELECT * FROM playlist_songs_activities WHERE playlist_id = $1',
+      values: [playlistId],
+    };
+
+    const result = await this._pool.query(query);
+
+    const remap = result.rows.map((item) => ({
+      username: item.user_id,
+      title: item.song_id,
+      action: item.action,
+      time: item.time,
+    }));
+
+    return {
+      playlistId,
+      activities: remap,
+    };
   }
 }
 
