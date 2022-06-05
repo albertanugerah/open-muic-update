@@ -23,6 +23,12 @@ const AuthenticationsService = require('./services/postgres/AuthenticationsServi
 const TokenManager = require('./tokenize/TokenManager');
 const AuthenticationsValidator = require('./validators/authentications');
 
+// error handling
+const ClientError = require('./exceptions/ClientError');
+const NotFoundError = require('./exceptions/NotFoundError');
+const AuthenticationError = require('./exceptions/AuthenticationError');
+const AuthorizationError = require('./exceptions/AuthorizationError');
+
 const init = async () => {
   const albumsService = new AlbumsService();
   const songsService = new SongsService();
@@ -88,6 +94,55 @@ const init = async () => {
         validator: AuthenticationsValidator,
       },
     }]);
+
+  server.ext('onPreResponse', (request, h) => {
+    // mendapatkan konteks respose dari request
+    const { response } = request;
+
+    if (response instanceof ClientError) {
+      // membuat response baru dari response toolkit sesuai kebutuhan error handling
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+    if (response instanceof NotFoundError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+    if (response instanceof AuthenticationError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+    if (response instanceof AuthorizationError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+
+    // Server ERROR!
+    const newResponse = h.response({
+      status: 'error',
+      message: 'Maaf, terjadi kegagalan pada server kami.',
+    });
+    newResponse.code(500);
+
+    // jika bukan ClientError, lanjutkan dengan repsonse sebelumnya (tanpa intervensi)
+    return response.continue || response;
+  });
 
   await server.start();
   console.log(`Server berjalan pada ${server.info.uri}`);
