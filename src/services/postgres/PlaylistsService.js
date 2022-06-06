@@ -177,22 +177,17 @@ class PlaylistsService {
 
   async getPlaylistActivities(playlistId) {
     const query = {
-      text: 'SELECT FROM playlist_songs_activities WHERE playlist_id = $1',
+      text: `select users.username,songs.title,action,time from playlist_songs_activities
+              inner join users on playlist_songs_activities.user_id = users.id
+              inner join songs on playlist_songs_activities.song_id = songs.id WHERE playlist_id = $1`,
       values: [playlistId],
     };
 
     const result = await this._pool.query(query);
 
-    const remap = result.rows.map((item) => ({
-      username: item.user_id,
-      title: item.song_id,
-      action: item.action,
-      time: item.time,
-    }));
-
     return {
       playlistId,
-      activities: remap,
+      activities: result.rows,
     };
   }
 }
