@@ -159,39 +159,17 @@ class PlaylistsService {
   }
 
   async addActionPlaylistActivity(playlistId, songId, userId, action = '') {
-    console.log(playlistId, songId, userId, action);
-    const querySong = {
-      text: 'SELECT title FROM songs WHERE id = $1',
-      values: [songId],
-    };
-    const queryUser = {
-      text: 'SELECT username FROM users WHERE id = $1',
-      values: [userId],
-    };
-
-    const resultSong = await this._pool.query(querySong);
-    const resultUser = await this._pool.query(queryUser);
-    if (!resultSong.rowCount) {
-      throw new NotFoundError('lagu tidak ada');
-    }
-
-    if (!resultUser.rowCount) {
-      throw new NotFoundError('lagu tidak ada');
-    }
-    const { title } = resultSong.rows[0];
-    const { username } = resultUser.rows[0];
-
     const id = `activity-${nanoid(16)}`;
     const time = new Date().toISOString();
     const act = (action === 'add') ? 'add' : 'delete';
 
     const query = {
       text: 'INSERT INTO playlist_songs_activities (id, playlist_id, song_id, user_id, action, time) VALUES ($1, $2, $3, $4, $5, $6)',
-      values: [id, playlistId, title, username, `${act}`, time],
+      values: [id, playlistId, songId, userId, `${act}`, time],
     };
 
     const result = await this._pool.query(query);
-    console.log(query.values, result);
+
     if (!result.rowCount) {
       throw new InvariantError('activitas gagal ditambahkan');
     }
@@ -199,7 +177,7 @@ class PlaylistsService {
 
   async getPlaylistActivities(playlistId) {
     const query = {
-      text: 'SELECT * FROM playlist_songs_activities WHERE playlist_id = $1',
+      text: 'SELECT FROM playlist_songs_activities WHERE playlist_id = $1',
       values: [playlistId],
     };
 
